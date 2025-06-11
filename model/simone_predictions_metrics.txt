@@ -1,0 +1,9 @@
+Metrics for model\simone_predictions.csv
+MSE: 0.6039
+MAE: 0.7558
+R2: -17.5755
+F1 Score: 0.0000
+ROC AUC: 0.5347522447622215
+Accuracy: 0.0963
+Precision: 0.0000
+Recall: 0.0000

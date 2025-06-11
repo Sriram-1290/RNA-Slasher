@@ -1,0 +1,9 @@
+Metrics for model\mix_predictions.csv
+MSE: 0.0870
+MAE: 0.2628
+R2: -0.1359
+F1 Score: 0.7695
+ROC AUC: 0.7621373168629705
+Accuracy: 0.6928
+Precision: 0.8800
+Recall: 0.6836

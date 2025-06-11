@@ -1,0 +1,9 @@
+Metrics for model\taka_predictions.csv
+MSE: 0.0539
+MAE: 0.1902
+R2: -0.2219
+F1 Score: 0.4040
+ROC AUC: 0.6092473389709286
+Accuracy: 0.4872
+Precision: 0.6524
+Recall: 0.2926

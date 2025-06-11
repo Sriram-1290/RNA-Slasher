@@ -54,9 +54,25 @@ def extract_features(siRNA, mRNA):
     ])
     return X_siRNA, X_mRNA, bio_feats
 
+def ensemble_predict(X, bio_feats_dim):
+    preds = []
+    for fold in range(1, 6):
+        model = ANN(bio_feats_dim)
+        model.load_state_dict(torch.load(f'model/ann_weights_fold{fold}.pth', map_location='cpu'))
+        model.eval()
+        with torch.no_grad():
+            x_tensor = torch.tensor(X, dtype=torch.float32)
+            pred = model(x_tensor).item()
+            preds.append(pred)
+    return np.mean(preds)
+
 def main():
-    # Load Taka.csv
-    df = pd.read_csv('data/Taka.csv')
+    datasets = [
+        ('Taka', 'data/Taka.csv', 'model/taka_predictions.csv'),
+        ('Mix', 'data/Mix.csv', 'model/mix_predictions.csv'),
+        ('Hu', 'data/Hu.csv', 'model/hu_predictions.csv'),
+        ('Simone', 'data/Simone.csv', 'model/simone_predictions.csv')
+    ]
     # Load scaler from Mix.csv
     mix_df = pd.read_csv('data/Mix.csv')
     scaler = StandardScaler()
@@ -102,34 +118,30 @@ def main():
             mRNA_pur, mRNA_pyr, mRNA_mw, mRNA_dinuc, mRNA_entropy, mRNA_run, mRNA_au_gc, mRNA_gcskew, mRNA_atskew, mRNA_kmers2, mRNA_kmers3, mRNA_ambig
         ], axis=1)
     scaler.fit(get_bio_feats(mix_df))
-    # Load model
-    # Use a sample row to get feature dim
-    _, _, sample_bio_feats = extract_features(df.iloc[0]['siRNA'], df.iloc[0]['mRNA'])
+    # Use a sample row from Mix to get feature dim
+    sample_row = mix_df.iloc[0]
+    _, _, sample_bio_feats = extract_features(sample_row['siRNA'], sample_row['mRNA'])
     bio_feats_dim = sample_bio_feats.shape[0]
-    model = ANN(bio_feats_dim)
-    model.load_state_dict(torch.load('model/ann_weights.pth', map_location='cpu'))
-    model.eval()
-    # Predict
-    results = []
-    for idx, row in df.iterrows():
-        siRNA = row['siRNA']
-        mRNA = row['mRNA']
-        efficacy = row['label'] if 'label' in row else np.nan
-        X_siRNA, X_mRNA, bio_feats = extract_features(siRNA, mRNA)
-        bio_feats_norm = scaler.transform([bio_feats])[0]
-        X = np.concatenate([X_siRNA, X_mRNA, bio_feats_norm])[None, :]
-        with torch.no_grad():
-            x_tensor = torch.tensor(X, dtype=torch.float32)
-            pred = model(x_tensor).item()
-        results.append({
-            'siRNA': siRNA,
-            'mRNA': mRNA,
-            'dataset efficacy': efficacy,
-            'predicted efficacy': pred
-        })
-    out_df = pd.DataFrame(results)
-    out_df.to_csv('model/taka_predictions.csv', index=False)
-    print('Predictions saved to model/taka_predictions.csv')
+    for name, in_path, out_path in datasets:
+        df = pd.read_csv(in_path)
+        results = []
+        for idx, row in df.iterrows():
+            siRNA = row['siRNA']
+            mRNA = row['mRNA']
+            efficacy = row['label'] if 'label' in row else np.nan
+            X_siRNA, X_mRNA, bio_feats = extract_features(siRNA, mRNA)
+            bio_feats_norm = scaler.transform([bio_feats])[0]
+            X = np.concatenate([X_siRNA, X_mRNA, bio_feats_norm])[None, :]
+            pred = ensemble_predict(X, bio_feats_dim)
+            results.append({
+                'siRNA': siRNA,
+                'mRNA': mRNA,
+                'dataset efficacy': efficacy,
+                'predicted efficacy': pred
+            })
+        out_df = pd.DataFrame(results)
+        out_df.to_csv(out_path, index=False)
+        print(f'Predictions saved to {out_path}')
 
 if __name__ == '__main__':
     main()

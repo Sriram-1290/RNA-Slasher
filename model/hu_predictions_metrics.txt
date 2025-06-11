@@ -1,0 +1,9 @@
+Metrics for model\hu_predictions.csv
+MSE: 0.0021
+MAE: 0.0357
+R2: 0.9079
+F1 Score: 0.9307
+ROC AUC: 0.9812275454733554
+Accuracy: 0.9238
+Precision: 0.9228
+Recall: 0.9386

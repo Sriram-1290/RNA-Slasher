@@ -123,9 +123,12 @@ class ANN(nn.Module):
             nn.ReLU(),
             nn.AdaptiveMaxPool1d(1)
         )
-        # MLP block (CNN outputs + normalized bio features)
+        # BiLSTM block for siRNA and mRNA only
+        self.bilstm_siRNA = nn.LSTM(input_size=4, hidden_size=32, num_layers=1, batch_first=True, bidirectional=True)
+        self.bilstm_mRNA = nn.LSTM(input_size=4, hidden_size=32, num_layers=1, batch_first=True, bidirectional=True)
+        # MLP block (CNN outputs + BiLSTM outputs + normalized bio features)
         self.mlp = nn.Sequential(
-            nn.Linear(64+64+bio_feats_dim, 256),
+            nn.Linear(64+64+64+64+bio_feats_dim, 256),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(256, 128),
@@ -149,9 +152,16 @@ class ANN(nn.Module):
         extra_features = x[:, siRNA_flat_size + mRNA_flat_size:]
         siRNA_seq = siRNA_flat.view(batch_size, SEQ_LEN, 4)
         mRNA_seq = mRNA_flat.view(batch_size, MRNA_LEN, 4)
+        # CNN outputs
         siRNA_cnn = self.cnn_siRNA(siRNA_seq.permute(0,2,1)).view(batch_size, -1)
         mRNA_cnn = self.cnn_mRNA(mRNA_seq.permute(0,2,1)).view(batch_size, -1)
-        features = torch.cat([siRNA_cnn, mRNA_cnn, extra_features], dim=1)
+        # BiLSTM outputs (take last hidden state from both directions and concatenate)
+        _, (siRNA_hn, _) = self.bilstm_siRNA(siRNA_seq)
+        _, (mRNA_hn, _) = self.bilstm_mRNA(mRNA_seq)
+        siRNA_bilstm = torch.cat([siRNA_hn[0], siRNA_hn[1]], dim=1)  # (batch, 64)
+        mRNA_bilstm = torch.cat([mRNA_hn[0], mRNA_hn[1]], dim=1)    # (batch, 64)
+        # Concatenate all features
+        features = torch.cat([siRNA_cnn, mRNA_cnn, siRNA_bilstm, mRNA_bilstm, extra_features], dim=1)
         out = self.mlp(features)
         return out.squeeze(-1)
 
@@ -161,8 +171,13 @@ def train_model(model, train_loader, val_loader, epochs=100, lr=5e-4, batch_size
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.MSELoss()
+    best_roc = -float('inf')
+    best_f1 = -float('inf')
+    best_state = None
+    best_epoch = -1
     for epoch in range(epochs):
         model.train()
+        train_losses = []
         for xb, yb in DataLoader(train_loader.dataset, batch_size=batch_size, shuffle=True):
             xb, yb = xb.to(device), yb.to(device)
             optimizer.zero_grad()
@@ -170,6 +185,8 @@ def train_model(model, train_loader, val_loader, epochs=100, lr=5e-4, batch_size
             loss = criterion(pred, yb)
             loss.backward()
             optimizer.step()
+            train_losses.append(loss.item())
+        train_loss = np.mean(train_losses)
         # Validation
         model.eval()
         val_losses = []
@@ -192,63 +209,40 @@ def train_model(model, train_loader, val_loader, epochs=100, lr=5e-4, batch_size
         except ValueError:
             val_roc = float('nan')
         val_f1 = f1_score(y_true_bin, y_pred_bin)
-        print(f"Epoch {epoch+1}/{epochs} - Val Loss: {val_loss:.4f} - Val ROC AUC: {val_roc:.4f} - Val F1: {val_f1:.4f}")
-    return model
+        is_best = False
+        if (val_roc > best_roc) and (val_f1 > 0.8):
+            best_roc = val_roc
+            best_f1 = val_f1
+            best_state = model.state_dict()
+            best_epoch = epoch + 1
+            is_best = True
+        log_str = f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Val ROC AUC: {val_roc:.4f} - Val F1: {val_f1:.4f}"
+        if is_best:
+            log_str += " ****"
+        print(log_str)
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    return model, best_roc, best_f1, best_epoch
 
-def main():
-    # K-Fold Cross-Validation on Hu.csv
-    df = pd.read_csv('data/Hu.csv')
-    n_splits = 5
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+if __name__ == "__main__":
+    # Paths to training and validation CSVs
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+    train_csv = os.path.join(base_dir, "data", "Hu.csv")
+    val_csv = os.path.join(base_dir, "data", "Mix.csv")
+
+    # Prepare scaler, datasets, and data loaders
     scaler = StandardScaler()
-    y_bin = (df['label'] >= 0.5).astype(int)
-    print('Class balance in Hu.csv:', np.bincount(y_bin))
-    fold_scores = []
-    for fold, (train_idx, val_idx) in enumerate(kf.split(df)):
-        print(f'Fold {fold+1}/{n_splits}')
-        train_df = df.iloc[train_idx].reset_index(drop=True)
-        val_df = df.iloc[val_idx].reset_index(drop=True)
-        # Fit scaler on train, transform both
-        train_dataset = SirnaDataset(df=train_df, scaler=scaler, fit_scaler=True)
-        val_dataset = SirnaDataset(df=val_df, scaler=scaler, fit_scaler=False)
-        train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=16)
-        bio_feats_dim = SirnaDataset.bio_feats_dim
-        model = ANN(bio_feats_dim)
-        model = train_model(model, train_loader, val_loader, epochs=50, lr=5e-4, batch_size=16)
-        # Evaluate ROC AUC on this fold
-        model.eval()
-        preds, targets = [], []
-        with torch.no_grad():
-            for xb, yb in val_loader:
-                preds.append(model(xb).numpy())
-                targets.append(yb.numpy())
-        preds = np.concatenate(preds)
-        targets = np.concatenate(targets)
-        y_true_bin = (targets >= 0.5).astype(int)
-        try:
-            val_roc = roc_auc_score(y_true_bin, preds)
-        except ValueError:
-            val_roc = float('nan')
-        val_f1 = f1_score(y_true_bin, (preds >= 0.5).astype(int))
-        print(f'Fold {fold+1} ROC AUC: {val_roc:.4f} | F1: {val_f1:.4f}')
-        fold_scores.append((val_roc, val_f1))
-        # Save model weights for inference after each fold
-        torch.save(model.state_dict(), f'model/ann_weights_fold{fold+1}.pth')
-        # Optionally, save the last fold as the default
-        if fold == n_splits - 1:
-            torch.save(model.state_dict(), 'model/ann_weights.pth')
-    # Print average scores
-    roc_aucs = [score[0] for score in fold_scores]
-    f1s = [score[1] for score in fold_scores]
-    log_lines = []
-    for i, (roc, f1) in enumerate(fold_scores):
-        log_lines.append(f'Fold {i+1} ROC AUC: {roc:.4f} | F1: {f1:.4f}')
-    log_lines.append(f'Average K-Fold ROC AUC: {np.nanmean(roc_aucs):.4f} | Average F1: {np.nanmean(f1s):.4f}')
-    log_text = '\n'.join(log_lines)
-    print(log_text)
-    with open('model/training_log.txt', 'w') as f:
-        f.write(log_text + '\n')
+    train_dataset = SirnaDataset(csv_path=train_csv, scaler=scaler, fit_scaler=True)
+    val_dataset = SirnaDataset(csv_path=val_csv, scaler=scaler, fit_scaler=False)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
 
-if __name__ == '__main__':
-    main()
+    # Initialize and train the model
+    model = ANN(SirnaDataset.bio_feats_dim)
+    trained_model, best_roc, best_f1, best_epoch = train_model(model, train_loader, val_loader, epochs=30, lr=0.0001, batch_size=16)
+
+    # Save model weights (only best)
+    output_dir = os.path.join(base_dir, "model")
+    os.makedirs(output_dir, exist_ok=True)
+    torch.save(trained_model.state_dict(), os.path.join(output_dir, "ann_weights_v1.pth"))
+    print(f"Best model saved from epoch {best_epoch} with ROC AUC: {best_roc:.4f}, F1: {best_f1:.4f}")

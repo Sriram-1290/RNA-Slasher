@@ -58,6 +58,18 @@ def extract_features(siRNA, mRNA):
     ])
     return X_siRNA, X_mRNA, bio_feats
 
+def ensemble_predict(X, bio_feats_dim):
+    preds = []
+    for fold in range(1, 6):
+        model = ANN(bio_feats_dim)
+        model.load_state_dict(torch.load(f'model/ann_weights_fold{fold}.pth', map_location='cpu'))
+        model.eval()
+        with torch.no_grad():
+            x_tensor = torch.tensor(X, dtype=torch.float32)
+            pred = model(x_tensor).item()
+            preds.append(pred)
+    return np.mean(preds)
+
 def main():
     # Prompt user for siRNA and mRNA sequences
     siRNA = input('Enter siRNA sequence: ').strip()
@@ -115,21 +127,9 @@ def main():
     X = np.concatenate([X_siRNA, X_mRNA, bio_feats_norm])[None, :]
     # Determine number of bio features (matches model.py logic)
     bio_feats_dim = bio_feats_norm.shape[0]
-    # Load model
-    model = ANN(bio_feats_dim)
-    model.load_state_dict(torch.load('model/ann_weights.pth', map_location='cpu'))
-    model.eval()
-    # Check input size
-    siRNA_flat_size = SEQ_LEN * 4
-    mRNA_flat_size = MRNA_LEN * 4
-    expected_input_size = siRNA_flat_size + mRNA_flat_size + bio_feats_dim
-    if X.shape[1] != expected_input_size:
-        print(f"Error: Input feature size ({X.shape[1]}) does not match model expected size ({expected_input_size}).")
-        return
-    with torch.no_grad():
-        x_tensor = torch.tensor(X, dtype=torch.float32)
-        pred = model(x_tensor).item()
-    print(f'Predicted efficacy: {pred:.4f}')
+    # Load model (ensemble of 5 folds)
+    pred = ensemble_predict(X, bio_feats_dim)
+    print(f'Ensemble predicted efficacy: {pred:.4f}')
 
 if __name__ == '__main__':
     main()
