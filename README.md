@@ -37,13 +37,6 @@ The RNA-Slasher model consists of:
 
 ## Performance Metrics
 
-| Dataset | ROC AUC | F1 Score | Accuracy | R² | Precision | Recall |
-|---------|---------|----------|----------|-----|-----------|--------|
-| Hu      | 0.981   | 0.931    | 0.924    | 0.908 | 0.923     | 0.939  |
-| Mix     | 0.762   | 0.770    | 0.693    | -0.136 | 0.880     | 0.684  |
-| Taka    | 0.609   | 0.404    | 0.487    | -0.222 | 0.652     | 0.293  |
-| Simone  | 0.535   | 0.000    | 0.096    | -17.576 | 0.000     | 0.000  |
-
 *K-fold cross-validation average: ROC AUC = 0.823, F1 = 0.765*
 
 ## Project Structure
@@ -61,10 +54,9 @@ RNA-Slasher/
 │   ├── Hu.csv                   # Hu dataset (processed)
 │   ├── Mix.csv                  # Mixed dataset (processed)
 │   ├── Taka.csv                 # Taka dataset (processed)
-│   ├── Simone.csv               # Simone dataset (processed)
-│   ├── Hu_unprocessed.csv       # Original Hu dataset
-│   ├── Mix_unprocessed.csv      # Original Mix dataset
-│   └── Taka_unprocessed.csv     # Original Taka dataset
+│   ├── Hu_unprocessed.csv       # Original Hu dataset with TD features
+│   ├── Mix_unprocessed.csv      # Original Mix dataset with TD features
+│   └── Taka_unprocessed.csv     # Original Taka dataset with TD features
 ├── model/                       # Trained models and results
 │   ├── ann_weights_fold*.pth    # Saved model weights (K-fold ensemble)
 │   ├── ann_weights_v1.pth       # Previous version weights
