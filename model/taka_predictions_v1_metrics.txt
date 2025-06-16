@@ -1,0 +1,17 @@
+Metrics for Taka Dataset - Model_v1
+==================================================
+
+MODEL_V1:
+--------------------
+Samples: 702
+MSE: 0.052084
+MAE: 0.186932
+RMSE: 0.228220
+R²: -0.179800
+ROC AUC: 0.598847
+F1 Score: 0.472784
+Correlation: 0.189021
+Mean True: 0.548514
+Mean Predicted: 0.464804
+Std True: 0.210111
+Std Predicted: 0.089791

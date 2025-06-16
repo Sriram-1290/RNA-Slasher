@@ -1,9 +1,33 @@
-Metrics for model\hu_predictions.csv
-MSE: 0.0021
-MAE: 0.0357
-R2: 0.9079
-F1 Score: 0.9307
-ROC AUC: 0.9812275454733554
-Accuracy: 0.9238
-Precision: 0.9228
-Recall: 0.9386
+Metrics for Hu Dataset
+==================================================
+
+ORIGINAL MODEL:
+--------------------
+Samples: 2361
+MSE: 0.002073
+MAE: 0.035664
+RMSE: 0.045529
+R²: 0.907858
+ROC AUC: 0.981228
+F1 Score: 0.930663
+Correlation: 0.961340
+Mean True: 0.514468
+Mean Predicted: 0.518835
+Std True: 0.149989
+Std Predicted: 0.125537
+
+ENHANCED MODEL:
+--------------------
+Samples: 2361
+MSE: 0.065881
+MAE: 0.216740
+RMSE: 0.256674
+R²: -1.928477
+ROC AUC: 0.614257
+F1 Score: 0.691275
+Correlation: 0.258518
+Mean True: 0.514468
+Mean Predicted: 0.603901
+Std True: 0.149989
+Std Predicted: 0.230842
+

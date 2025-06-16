@@ -1,9 +1,33 @@
-Metrics for model\taka_predictions.csv
-MSE: 0.0539
-MAE: 0.1902
-R2: -0.2219
-F1 Score: 0.4040
-ROC AUC: 0.6092473389709286
-Accuracy: 0.4872
-Precision: 0.6524
-Recall: 0.2926
+Metrics for Taka Dataset
+==================================================
+
+ORIGINAL MODEL:
+--------------------
+Samples: 702
+MSE: 0.053945
+MAE: 0.190235
+RMSE: 0.232260
+R²: -0.221946
+ROC AUC: 0.609247
+F1 Score: 0.403974
+Correlation: 0.199055
+Mean True: 0.548514
+Mean Predicted: 0.447691
+Std True: 0.210111
+Std Predicted: 0.078999
+
+ENHANCED MODEL:
+--------------------
+Samples: 702
+MSE: 0.050944
+MAE: 0.178665
+RMSE: 0.225709
+R²: -0.153979
+ROC AUC: 0.854861
+F1 Score: 0.730556
+Correlation: 0.610080
+Mean True: 0.548514
+Mean Predicted: 0.446054
+Std True: 0.210111
+Std Predicted: 0.241016
+

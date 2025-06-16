@@ -1,0 +1,17 @@
+Metrics for Hu Dataset - Model_v1
+==================================================
+
+MODEL_V1:
+--------------------
+Samples: 2361
+MSE: 0.007318
+MAE: 0.066786
+RMSE: 0.085545
+R²: 0.674714
+ROC AUC: 0.916412
+F1 Score: 0.854317
+Correlation: 0.826142
+Mean True: 0.514468
+Mean Predicted: 0.525048
+Std True: 0.149989
+Std Predicted: 0.115946

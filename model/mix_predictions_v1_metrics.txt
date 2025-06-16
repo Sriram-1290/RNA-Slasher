@@ -1,0 +1,17 @@
+Metrics for Mix Dataset - Model_v1
+==================================================
+
+MODEL_V1:
+--------------------
+Samples: 472
+MSE: 0.086236
+MAE: 0.260255
+RMSE: 0.293660
+R²: -0.126171
+ROC AUC: 0.753902
+F1 Score: 0.777778
+Correlation: 0.480543
+Mean True: 0.687136
+Mean Predicted: 0.522899
+Std True: 0.276721
+Std Predicted: 0.113727
