@@ -4,8 +4,8 @@ import numpy as np
 import os
 import argparse
 from sklearn.preprocessing import StandardScaler
-from model import ANN, one_hot_encode, SEQ_LEN, MRNA_LEN, SirnaDataset
-from model_v2 import EnhancedANN, SirnaDataset as EnhancedSirnaDataset
+from model import ANN, SEQ_LEN, MRNA_LEN, SirnaDataset
+from model_v3 import EnhancedANN, one_hot_encode, SirnaDataset as EnhancedSirnaDataset
 from bio_features import (
     gc_content, at_content, melting_temp, length, base_frequencies,
     purine_content, pyrimidine_content, molecular_weight, dinucleotide_frequencies, shannon_entropy,
@@ -14,6 +14,9 @@ from bio_features import (
 
 def extract_features(siRNA, mRNA):
     """Extract features for a single siRNA-mRNA pair"""
+    # Import the updated one_hot_encode from model_v2
+    from model_v3 import one_hot_encode
+    
     # One-hot encoding
     X_siRNA = one_hot_encode(siRNA, SEQ_LEN)
     X_mRNA = one_hot_encode(mRNA, MRNA_LEN)
@@ -178,8 +181,7 @@ def predict_from_file(csv_file, model_type='enhanced', output_file=None):
     
     Returns:
         DataFrame with predictions
-    """
-    # Load data
+    """    # Load data
     df = pd.read_csv(csv_file)
     
     if 'siRNA' not in df.columns or 'mRNA' not in df.columns:
@@ -190,11 +192,11 @@ def predict_from_file(csv_file, model_type='enhanced', output_file=None):
     ref_csv = os.path.join(base_dir, "data", "Mix.csv")
     
     scaler = StandardScaler()
-    ref_dataset = SirnaDataset(csv_path=ref_csv, scaler=scaler, fit_scaler=True)
-    bio_feats_dim = SirnaDataset.bio_feats_dim
+    ref_dataset = EnhancedSirnaDataset(csv_path=ref_csv, scaler=scaler, fit_scaler=True)
+    bio_feats_dim = EnhancedSirnaDataset.bio_feats_dim
     
     # Create dataset for predictions
-    pred_dataset = SirnaDataset(df=df, scaler=scaler, fit_scaler=False)
+    pred_dataset = EnhancedSirnaDataset(df=df, scaler=scaler, fit_scaler=False)
     
     predictions = []
     
@@ -244,8 +246,7 @@ def main():
         # Prompt user for siRNA and mRNA sequences
         siRNA = input('Enter siRNA sequence: ').strip().upper()
         mRNA = input('Enter mRNA sequence: ').strip().upper()
-        
-        # Validate sequences
+          # Validate sequences
         valid_nucleotides = set('AUCG')
         if not all(c in valid_nucleotides for c in siRNA):
             print("Warning: siRNA contains invalid nucleotides. Using only A, U, C, G.")
@@ -258,27 +259,20 @@ def main():
         print(f"\nProcessing:")
         print(f"siRNA: {siRNA}")
         print(f"mRNA:  {mRNA}")
-        print()
-
-        # Extract features
+        print()        # Extract features
         X_siRNA, X_mRNA, bio_feats = extract_features(siRNA, mRNA)
         
-        # Load scaler from training set
+        # Load scaler from training set using enhanced dataset
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
         ref_csv = os.path.join(base_dir, "data", "Mix.csv")
         
-        df = pd.read_csv(ref_csv)
         scaler = StandardScaler()
-        bio_feats_training = get_bio_feats(df)
-        scaler.fit(bio_feats_training)
+        ref_dataset = EnhancedSirnaDataset(csv_path=ref_csv, scaler=scaler, fit_scaler=True)
+        bio_feats_dim = EnhancedSirnaDataset.bio_feats_dim
         
         bio_feats_norm = scaler.transform([bio_feats])[0]
-        
-        # Prepare input
+          # Prepare input
         X = np.concatenate([X_siRNA, X_mRNA, bio_feats_norm])[None, :]
-        
-        # Determine number of bio features
-        bio_feats_dim = bio_feats_norm.shape[0]
         
         # Make prediction
         pred = predict_single(X, bio_feats_dim, args.model)

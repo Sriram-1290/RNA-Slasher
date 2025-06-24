@@ -107,7 +107,7 @@ class SirnaDataset(Dataset):
 
 # --- Enhanced Neural Network Components ---
 class MultiScaleCNN(nn.Module):
-    def __init__(self, in_channels=5):  # Changed from 4 to 5
+    def __init__(self, in_channels=5):
         super().__init__()
         # Different kernel sizes to capture different motif lengths
         self.conv3 = nn.Conv1d(in_channels, 32, kernel_size=3, padding=1)
@@ -127,23 +127,41 @@ class MultiScaleCNN(nn.Module):
         return self.pool(combined).squeeze(-1)
 
 class SelfAttention(nn.Module):
-    def __init__(self, embed_dim):
+    def __init__(self, embed_dim, projected_dim=8):
         super().__init__()
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads=5, batch_first=True)
+        # Project to a dimension divisible by more heads
+        self.input_projection = nn.Linear(embed_dim, projected_dim)
+        self.output_projection = nn.Linear(projected_dim, embed_dim)
+        self.attention = nn.MultiheadAttention(projected_dim, num_heads=8, batch_first=True)
         self.norm = nn.LayerNorm(embed_dim)
         
     def forward(self, x):
-        attn_out, _ = self.attention(x, x, x)
+        # Project input
+        x_proj = self.input_projection(x)
+        # Apply attention
+        attn_out, _ = self.attention(x_proj, x_proj, x_proj)
+        # Project back to original dimension
+        attn_out = self.output_projection(attn_out)
         return self.norm(x + attn_out)  # Residual connection
 
 class CrossAttention(nn.Module):
-    def __init__(self, embed_dim):
+    def __init__(self, embed_dim, projected_dim=8):
         super().__init__()
-        self.cross_attn = nn.MultiheadAttention(embed_dim, num_heads=5, batch_first=True)
+        # Project to a dimension divisible by more heads
+        self.query_projection = nn.Linear(embed_dim, projected_dim)
+        self.key_value_projection = nn.Linear(embed_dim, projected_dim)
+        self.output_projection = nn.Linear(projected_dim, embed_dim)
+        self.cross_attn = nn.MultiheadAttention(projected_dim, num_heads=8, batch_first=True)
         self.norm = nn.LayerNorm(embed_dim)
         
     def forward(self, query, key_value):
-        attn_out, attn_weights = self.cross_attn(query, key_value, key_value)
+        # Project inputs
+        query_proj = self.query_projection(query)
+        kv_proj = self.key_value_projection(key_value)
+        # Apply cross attention
+        attn_out, attn_weights = self.cross_attn(query_proj, kv_proj, kv_proj)
+        # Project back to original dimension
+        attn_out = self.output_projection(attn_out)
         return self.norm(query + attn_out), attn_weights
 
 class ResidualBlock(nn.Module):
@@ -152,7 +170,7 @@ class ResidualBlock(nn.Module):
         self.block = nn.Sequential(
             nn.Linear(dim, dim),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.3),
             nn.Linear(dim, dim)
         )
         self.norm = nn.LayerNorm(dim)
@@ -167,7 +185,7 @@ class FeatureEncoder(nn.Module):
         self.bio_encoder = nn.Sequential(
             nn.Linear(bio_feats_dim, bio_feats_dim * 2),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.3),
             nn.Linear(bio_feats_dim * 2, bio_feats_dim),
             nn.ReLU()
         )
@@ -181,23 +199,23 @@ class EnhancedANN(nn.Module):
         super().__init__()
         
         # Multi-scale CNNs for siRNA and mRNA
-        self.cnn_siRNA = MultiScaleCNN(5)  # Changed from 4 to 5
-        self.cnn_mRNA = MultiScaleCNN(5)   # Changed from 4 to 5
+        self.cnn_siRNA = MultiScaleCNN(5)
+        self.cnn_mRNA = MultiScaleCNN(5)
         
         # Self-attention for sequence understanding
-        self.siRNA_attention = SelfAttention(5)  # Changed from 4 to 5
-        self.mRNA_attention = SelfAttention(5)   # Changed from 4 to 5
+        self.siRNA_attention = SelfAttention(5)  # Now uses 1 head
+        self.mRNA_attention = SelfAttention(5)   # Now uses 1 head
         
         # Cross-attention for siRNA-mRNA interaction
-        self.cross_attention = CrossAttention(5)  # Changed from 4 to 5
+        self.cross_attention = CrossAttention(5)  # Now uses 1 head
         
         # Enhanced BiLSTM with more layers and dropout
         self.bilstm_siRNA = nn.LSTM(
-            input_size=5, hidden_size=64, num_layers=2,  # Changed from 4 to 5
+            input_size=5, hidden_size=64, num_layers=2,
             batch_first=True, bidirectional=True, dropout=0.2
         )
         self.bilstm_mRNA = nn.LSTM(
-            input_size=5, hidden_size=64, num_layers=2,  # Changed from 4 to 5
+            input_size=5, hidden_size=64, num_layers=2,
             batch_first=True, bidirectional=True, dropout=0.2
         )
         
@@ -228,8 +246,8 @@ class EnhancedANN(nn.Module):
 
     def forward(self, x):
         batch_size = x.size(0)
-        siRNA_flat_size = SEQ_LEN * 5  # Changed from 4 to 5
-        mRNA_flat_size = MRNA_LEN * 5  # Changed from 4 to 5
+        siRNA_flat_size = SEQ_LEN * 5
+        mRNA_flat_size = MRNA_LEN * 5
         
         # Extract sequences and features
         siRNA_flat = x[:, :siRNA_flat_size]
@@ -237,8 +255,8 @@ class EnhancedANN(nn.Module):
         extra_features = x[:, siRNA_flat_size + mRNA_flat_size:]
         
         # Reshape sequences
-        siRNA_seq = siRNA_flat.view(batch_size, SEQ_LEN, 5)  # Changed from 4 to 5
-        mRNA_seq = mRNA_flat.view(batch_size, MRNA_LEN, 5)   # Changed from 4 to 5
+        siRNA_seq = siRNA_flat.view(batch_size, SEQ_LEN, 5)
+        mRNA_seq = mRNA_flat.view(batch_size, MRNA_LEN, 5)
         
         # Apply self-attention
         siRNA_attended = self.siRNA_attention(siRNA_seq)
@@ -391,7 +409,7 @@ if __name__ == "__main__":
     print(f"Trainable parameters: {trainable_params:,}")
     
     trained_model, best_roc, best_f1, best_epoch = train_model_enhanced(
-        model, train_loader, val_loader, epochs=50, lr=0.0001, batch_size=16
+        model, train_loader, val_loader, epochs=100, lr=0.00003, batch_size=64
     )
 
     # Save model weights (only best)

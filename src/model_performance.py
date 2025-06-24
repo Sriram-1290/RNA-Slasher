@@ -6,7 +6,7 @@ import argparse
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, f1_score, mean_squared_error, mean_absolute_error, r2_score
 from model import ANN, one_hot_encode, SEQ_LEN, MRNA_LEN, SirnaDataset
-from model_v2 import EnhancedANN, SirnaDataset as EnhancedSirnaDataset
+from model_v3 import EnhancedANN, SirnaDataset as EnhancedSirnaDataset
 from bio_features import (
     gc_content, at_content, melting_temp, length, base_frequencies,
     purine_content, pyrimidine_content, molecular_weight, dinucleotide_frequencies, shannon_entropy,

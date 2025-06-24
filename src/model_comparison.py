@@ -9,8 +9,8 @@ import seaborn as sns
 import os
 
 # Import both model versions
-from model_v1 import ANN as OriginalANN, SirnaDataset
-from model_v2 import EnhancedANN, SirnaDataset as EnhancedSirnaDataset
+from model_v1 import ANN as OriginalANN, SirnaDataset as OriginalSirnaDataset
+from model_v3 import EnhancedANN, SirnaDataset as EnhancedSirnaDataset
 
 def evaluate_model(model, data_loader, device):
     """Evaluate a model and return comprehensive metrics"""
@@ -44,30 +44,35 @@ def compare_models():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
     
-    # Load datasets
-    scaler = StandardScaler()
-    train_dataset = SirnaDataset(csv_path=os.path.join(base_dir, "data", "Hu.csv"), 
-                                scaler=scaler, fit_scaler=True)
-    val_dataset = SirnaDataset(csv_path=os.path.join(base_dir, "data", "Mix.csv"), 
-                              scaler=scaler, fit_scaler=False)
+    # Load datasets for both model types
+    # Original model uses v1 dataset (4 nucleotides)
+    original_scaler = StandardScaler()
+    original_val_dataset = OriginalSirnaDataset(csv_path=os.path.join(base_dir, "data", "Mix.csv"), 
+                                               scaler=original_scaler, fit_scaler=True)
+    original_val_loader = DataLoader(original_val_dataset, batch_size=16, shuffle=False)
     
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
+    # Enhanced model uses v2 dataset (5 nucleotides)
+    enhanced_scaler = StandardScaler()
+    enhanced_train_dataset = EnhancedSirnaDataset(csv_path=os.path.join(base_dir, "data", "Hu.csv"), 
+                                                 scaler=enhanced_scaler, fit_scaler=True)
+    enhanced_val_dataset = EnhancedSirnaDataset(csv_path=os.path.join(base_dir, "data", "Mix.csv"), 
+                                               scaler=enhanced_scaler, fit_scaler=False)
+    enhanced_val_loader = DataLoader(enhanced_val_dataset, batch_size=16, shuffle=False)
     
-    # Initialize models
-    original_model = OriginalANN(SirnaDataset.bio_feats_dim)
-    enhanced_model = EnhancedANN(SirnaDataset.bio_feats_dim)
+    # Initialize models with appropriate dimensions
+    original_model = OriginalANN(OriginalSirnaDataset.bio_feats_dim)
+    enhanced_model = EnhancedANN(EnhancedSirnaDataset.bio_feats_dim)
     
     # Load weights if available
     original_weights_path = os.path.join(base_dir, "model", "ann_weights_v1.pth")
     enhanced_weights_path = os.path.join(base_dir, "model", "enhanced_ann_weights_v2.pth")
     
     results = {}
-    
-    # Evaluate original model if weights exist
+      # Evaluate original model if weights exist
     if os.path.exists(original_weights_path):
         original_model.load_state_dict(torch.load(original_weights_path, map_location=device))
         original_model.to(device)
-        original_metrics, y_true_orig, y_pred_orig = evaluate_model(original_model, val_loader, device)
+        original_metrics, y_true_orig, y_pred_orig = evaluate_model(original_model, original_val_loader, device)
         results['original'] = {
             'metrics': original_metrics,
             'predictions': y_pred_orig,
@@ -82,7 +87,7 @@ def compare_models():
     if os.path.exists(enhanced_weights_path):
         enhanced_model.load_state_dict(torch.load(enhanced_weights_path, map_location=device))
         enhanced_model.to(device)
-        enhanced_metrics, y_true_enh, y_pred_enh = evaluate_model(enhanced_model, val_loader, device)
+        enhanced_metrics, y_true_enh, y_pred_enh = evaluate_model(enhanced_model, enhanced_val_loader, device)
         results['enhanced'] = {
             'metrics': enhanced_metrics,
             'predictions': y_pred_enh,
@@ -92,10 +97,12 @@ def compare_models():
         for metric, value in enhanced_metrics.items():
             print(f"  {metric.upper()}: {value:.4f}")
         print()
-    
-    # Compare if both models are available
+      # Compare if both models are available
     if 'original' in results and 'enhanced' in results:
         print("Improvement Summary:")
+        print("Note: Both models evaluated on the same validation dataset (Mix.csv)")
+        print("Original model uses 4-nucleotide encoding, Enhanced model uses 5-nucleotide encoding")
+        print()
         for metric in original_metrics.keys():
             original_val = results['original']['metrics'][metric]
             enhanced_val = results['enhanced']['metrics'][metric]
@@ -167,9 +174,31 @@ def create_comparison_plots(results, base_dir):
 
 def analyze_model_complexity():
     """Analyze and compare model complexity"""
-    # Initialize models
-    original_model = OriginalANN(50)  # Approximate bio_feats_dim
-    enhanced_model = EnhancedANN(50)
+    # Initialize models with realistic bio_feats_dim
+    # Use a dummy dataset to get the correct dimensions
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+    
+    # Get original model dimensions
+    try:
+        dummy_scaler = StandardScaler()
+        dummy_original_dataset = OriginalSirnaDataset(csv_path=os.path.join(base_dir, "data", "Mix.csv"), 
+                                                     scaler=dummy_scaler, fit_scaler=True)
+        original_bio_feats_dim = OriginalSirnaDataset.bio_feats_dim
+        original_model = OriginalANN(original_bio_feats_dim)
+    except:
+        # Fallback to approximate value
+        original_model = OriginalANN(50)
+    
+    # Get enhanced model dimensions
+    try:
+        dummy_scaler2 = StandardScaler()
+        dummy_enhanced_dataset = EnhancedSirnaDataset(csv_path=os.path.join(base_dir, "data", "Mix.csv"), 
+                                                     scaler=dummy_scaler2, fit_scaler=True)
+        enhanced_bio_feats_dim = EnhancedSirnaDataset.bio_feats_dim
+        enhanced_model = EnhancedANN(enhanced_bio_feats_dim)
+    except:
+        # Fallback to approximate value
+        enhanced_model = EnhancedANN(50)
     
     # Count parameters
     original_params = sum(p.numel() for p in original_model.parameters())

@@ -64,7 +64,7 @@ def diagnose_model_issues():
     # Load and analyze model architectures
     try:
         from model import ANN
-        from model_v2 import EnhancedANN
+        from model_v3 import EnhancedANN
         
         # Create sample models to analyze complexity
         bio_feats_dim = 50  # Approximate
